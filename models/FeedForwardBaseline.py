@@ -25,6 +25,7 @@ class FeedForwardBaseline(nn.Module):
         self.fc1 = nn.Linear(input_size, hidden_size, dtype=torch.float64)
         self.relu = nn.ReLU()
         self.fc2 = nn.Linear(hidden_size, output_size, dtype=torch.float64)
+        self.contact_sigmoid = nn.Sigmoid()
 
     def forward(self, input: Dict[str, torch.Tensor]):
         # Get the position, velocity, and acceleration tensors
@@ -45,7 +46,7 @@ class FeedForwardBaseline(nn.Module):
         # Now we need to split the output into the different components
         output_dict: Dict[str, torch.Tensor] = {}
         # First, the contact predictions
-        output_dict[OutputDataKeys.CONTACT] = x[:, :2*self.window_size].reshape(
+        output_dict[OutputDataKeys.CONTACT] = self.contact_sigmoid(x[:, :2*self.window_size]).reshape(
             (-1, 2, self.window_size)
         )
         # Then the COM acceleration
