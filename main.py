@@ -11,7 +11,7 @@ window_size = 10
 # The batch size is the number of windows we want to load at once, for parallel training and inference on a GPU
 batch_size = 32
 # The number of epochs is the number of times we want to iterate over the entire dataset during training
-epochs = 10
+epochs = 40
 # Learning rate
 learning_rate = 1e-3
 # Noise to artificially add to the position data during training / testing
@@ -29,7 +29,7 @@ train_dataloader = DataLoader(
 dev_dataloader = DataLoader(dev_dataset, batch_size=batch_size, shuffle=True)
 
 # Define the model
-model = TransformerBaseline(train_dataset.dofs, window_size)
+model = TransformerBaseline(train_dataset.dofs, window_size, num_layers=1)
 
 # Define the loss function
 loss_evaluator = LossEvaluator()

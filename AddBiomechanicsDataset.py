@@ -99,10 +99,10 @@ class AddBiomechanicsDataset(Dataset):
 
         for i in range(self.window_size):
             frame = frames[i]
-            numpy_input_dict[InputDataKeys.POS][:, i] += frame.pos
+            numpy_input_dict[InputDataKeys.POS][6:, i] += frame.pos[6:]
             numpy_input_dict[InputDataKeys.VEL][:, i] += frame.vel
             numpy_input_dict[InputDataKeys.ACC][:, i] += frame.acc
-            numpy_input_dict[InputDataKeys.COM_POS][:, i] += frame.comPos
+            # numpy_input_dict[InputDataKeys.COM_POS][:, i] += frame.comPos
             numpy_input_dict[InputDataKeys.COM_VEL][:, i] += frame.comVel
             numpy_input_dict[InputDataKeys.COM_ACC][:, i] += frame.comAcc
             numpy_output_dict[OutputDataKeys.CONTACT][:, i] = frame.contact
