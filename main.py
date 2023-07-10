@@ -31,15 +31,14 @@ dev_dataloader = DataLoader(dev_dataset, batch_size=batch_size, shuffle=True)
 # Define the model
 model = TransformerBaseline(train_dataset.dofs, window_size, num_layers=1)
 
-# Define the loss function
-loss_evaluator = LossEvaluator()
 
 # Define the optimizer
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 for epoch in range(epochs):
     # Iterate over the entire training dataset
-    sum_train_loss = 0.0
+    loss_evaluator = LossEvaluator(
+        contact_weight=1.0, com_acc_weight=1e-3, contact_forces_weight=1e-3)
     for batch in train_dataloader:
         inputs: Dict[str, torch.Tensor]
         labels: Dict[str, torch.Tensor]
@@ -65,7 +64,8 @@ for epoch in range(epochs):
     loss_evaluator.print_report()
 
     # At the end of each epoch, evaluate the model on the dev set
-    dev_loss_evaluator = LossEvaluator()
+    dev_loss_evaluator = LossEvaluator(
+        contact_weight=1.0, com_acc_weight=1e-3, contact_forces_weight=1e-3)
     with torch.no_grad():
         for batch in dev_dataloader:
             inputs: Dict[str, torch.Tensor]
