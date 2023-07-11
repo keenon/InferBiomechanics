@@ -31,10 +31,10 @@ class LossEvaluator:
 
     def __call__(self, outputs: Dict[str, torch.Tensor], labels: Dict[str, torch.Tensor]) -> torch.Tensor:
         # Compute the loss
-        loss = self.contact_weight * self.contact_criterion(outputs[OutputDataKeys.CONTACT], labels[OutputDataKeys.CONTACT]) + \
-            self.com_acc_weight * self.com_acc_criterion(outputs[OutputDataKeys.COM_ACC], labels[OutputDataKeys.COM_ACC]) + \
-            self.contact_forces_weight * self.contact_forces_criterion(
-                outputs[OutputDataKeys.CONTACT_FORCES], labels[OutputDataKeys.CONTACT_FORCES])
+        loss = self.contact_weight * self.contact_criterion(outputs[OutputDataKeys.CONTACT], labels[OutputDataKeys.CONTACT])
+            # self.com_acc_weight * self.com_acc_criterion(outputs[OutputDataKeys.COM_ACC], labels[OutputDataKeys.COM_ACC]) + \
+            # self.contact_forces_weight * self.contact_forces_criterion(
+            #     outputs[OutputDataKeys.CONTACT_FORCES], labels[OutputDataKeys.CONTACT_FORCES])
 
         # Keep track of various performance metrics to report
         with torch.no_grad():
@@ -43,10 +43,10 @@ class LossEvaluator:
             # Sum over time, and over the batch
             self.sum_correct_foot_classifications += torch.sum(
                 rounded_contact == labels[OutputDataKeys.CONTACT], dim=(0, 2)).numpy()
-            self.sum_com_acc_mpss_error += torch.sum(
-                torch.abs(outputs[OutputDataKeys.COM_ACC] - labels[OutputDataKeys.COM_ACC]), dim=(0, 2)).numpy()
-            self.sum_contact_forces_N_error += torch.sum(
-                torch.abs(outputs[OutputDataKeys.CONTACT_FORCES] - labels[OutputDataKeys.CONTACT_FORCES]), dim=(0, 2)).numpy()
+            # self.sum_com_acc_mpss_error += torch.sum(
+            #     torch.abs(outputs[OutputDataKeys.COM_ACC] - labels[OutputDataKeys.COM_ACC]), dim=(0, 2)).numpy()
+            # self.sum_contact_forces_N_error += torch.sum(
+            #     torch.abs(outputs[OutputDataKeys.CONTACT_FORCES] - labels[OutputDataKeys.CONTACT_FORCES]), dim=(0, 2)).numpy()
             self.sum_timesteps += outputs[OutputDataKeys.CONTACT].shape[0] * \
                 outputs[OutputDataKeys.CONTACT].shape[2]
             self.sum_loss += loss.item()
