@@ -32,10 +32,10 @@ def split_files(base_dir, train_percentage, train_dir, dev_dir, expecting_dofs):
                     continue
                 if file_hash < threshold:
                     if not os.path.exists(os.path.join(train_dir, file)):
-                        shutil.move(file_path, train_dir)
+                        shutil.copy(file_path, train_dir)
                 else:
                     if not os.path.exists(os.path.join(dev_dir, file)):
-                        shutil.move(file_path, dev_dir)
+                        shutil.copy(file_path, dev_dir)
 
 # Modify these paths as needed
 base_dir = './data/processed'

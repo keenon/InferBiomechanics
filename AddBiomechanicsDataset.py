@@ -39,6 +39,7 @@ class AddBiomechanicsDataset(Dataset):
         self.windows = []
 
         # Walk the folder path, and check for any with the ".bin" extension (indicating that they are AddBiomechanics binary data files)
+        num_skipped = 0
         for root, dirs, files in os.walk(folder_path):
             for file in files:
                 if file.endswith(".bin"):
@@ -50,18 +51,41 @@ class AddBiomechanicsDataset(Dataset):
                     self.subjects.append(subject)
                     # Also, count how many random windows we could select from this subject
                     for trial in range(subject.getNumTrials()):
+                        probably_missing: List[bool] = subject.getProbablyMissingGRF(trial)
+
                         trial_length = subject.getTrialLength(trial)
                         for window_start in range(max(trial_length - (window_size * stride) + 1, 0)):
-                            self.windows.append(
-                                (subject, trial, window_start, subject_path))
+                            # Check if any of the frames in this window are probably missing GRF data
+                            # If so, skip this window
+                            skip = False
+                            for i in range(window_start, window_start + window_size):
+                                if probably_missing[i]:
+                                    skip = True
+                                    break
+                            if not skip:
+                                self.windows.append(
+                                    (subject, trial, window_start, subject_path))
+                            else:
+                                num_skipped += 1
+
+        print('Num windows: ' + str(len(self.windows)))
+        print('Num skipped due to missing GRF: ' + str(num_skipped))
 
         # Read the dofs from the first subject (assuming they are all the same)
         self.input_dof_indices = []
         skel = self.subjects[0].readSkel()
+        dof_names = []
         for i in range(skel.getNumDofs()):
             dof_name = skel.getDofByIndex(i).getName()
-            if dof_name in input_dofs:
-                self.input_dof_indices.append(i)
+            dof_names.append(dof_name)
+
+        for dof_name in input_dofs:
+            index = dof_names.index(dof_name)
+            if index >= 0:
+                self.input_dof_indices.append(index)
+            else:
+                # Throw an exception
+                raise Exception('Dof ' + dof_name + ' not found in input dofs')
 
     def __len__(self):
         return len(self.windows)
@@ -69,7 +93,7 @@ class AddBiomechanicsDataset(Dataset):
     def __getitem__(self, index: int):
         subject, trial, start_frame, subject_path = self.windows[index]
         frames: List[nimble.biomechanics.Frame] = subject.readFrames(
-            trial, start_frame, self.window_size, self.stride)
+            trial, start_frame, numFramesToRead=self.window_size, stride=self.stride, contactThreshold=0.1)
         dt = subject.getTrialTimestep(trial)
 
         # Convert the frames to a dictionary of matrices, where columns are timesteps and rows are degrees of freedom / dimensions
@@ -83,12 +107,31 @@ class AddBiomechanicsDataset(Dataset):
         numpy_output_dict: Dict[str, np.ndarray] = {}
 
 
-        poses = [np.copy(frame.pos) for frame in frames]
-        numpy_input_dict[InputDataKeys.POS] = np.column_stack([np.array(frame.pos[self.input_dof_indices]) for frame in frames])
-        numpy_input_dict[InputDataKeys.VEL] = np.column_stack([np.array(frame.vel[self.input_dof_indices]) for frame in frames])
-        numpy_input_dict[InputDataKeys.ACC] = np.column_stack([np.array(frame.acc[self.input_dof_indices]) for frame in frames])
-        numpy_input_dict[InputDataKeys.COM_ACC] = np.column_stack([np.array(frame.comAcc) for frame in frames])
-        numpy_output_dict[OutputDataKeys.CONTACT] = np.column_stack([np.array(frame.contact, dtype=np.float64) for frame in frames])
+        poses = [frame.pos for frame in frames]
+        numpy_input_dict[InputDataKeys.POS] = np.column_stack([frame.pos[self.input_dof_indices] for frame in frames])
+        numpy_input_dict[InputDataKeys.VEL] = np.column_stack([frame.vel[self.input_dof_indices] for frame in frames])
+        numpy_input_dict[InputDataKeys.ACC] = np.column_stack([frame.acc[self.input_dof_indices] for frame in frames])
+        numpy_input_dict[InputDataKeys.COM_ACC] = np.column_stack([frame.comAcc for frame in frames])
+
+        # numpy_output_dict[OutputDataKeys.CONTACT] = np.column_stack([np.array(frame.contact, dtype=np.float64) for frame in frames])
+
+        contact_class = 0
+        if frames[-1].contact[0] == 0 and frames[-1].contact[1] == 0:
+            # Flight phase
+            contact_class = 0
+        elif frames[-1].contact[0] == 1 and frames[-1].contact[1] == 0:
+            # Left foot stance
+            contact_class = 1
+        elif frames[-1].contact[0] == 0 and frames[-1].contact[1] == 1:
+            # Right foot stance
+            contact_class = 2
+        elif frames[-1].contact[0] == 1 and frames[-1].contact[1] == 1:
+            # Double stance
+            contact_class = 3
+        one_hot_contact = np.zeros(4, dtype=np.float32)
+        one_hot_contact[contact_class] = 1
+
+        numpy_output_dict[OutputDataKeys.CONTACT] = one_hot_contact
 
         # ###################################################
         # # Plotting
@@ -101,8 +144,6 @@ class AddBiomechanicsDataset(Dataset):
         #     plt.plot(x, numpy_input_dict[InputDataKeys.ACC][i, :], label='acc_' + self.input_dofs[i])
         # for i in range(3):
         #     plt.plot(x, numpy_input_dict[InputDataKeys.COM_ACC][i, :], label='com_acc_' + str(i))
-        # for i in range(2):
-        #     plt.plot(x, numpy_output_dict[OutputDataKeys.CONTACT][i, :] * 200 - 100, label='contact_' + str(i))
         # # Add the legend outside the plot
         # plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         # plt.show()
@@ -127,12 +168,12 @@ class AddBiomechanicsDataset(Dataset):
             input_dict: Dict[str, torch.Tensor] = {}
             for key in numpy_input_dict:
                 input_dict[key] = torch.tensor(
-                    numpy_input_dict[key], device=self.device)
+                    numpy_input_dict[key], dtype=torch.float32, device=self.device)
 
             label_dict: Dict[str, torch.Tensor] = {}
             for key in numpy_output_dict:
                 label_dict[key] = torch.tensor(
-                    numpy_output_dict[key], device=self.device)
+                    numpy_output_dict[key], dtype=torch.float32, device=self.device)
 
         # Return the input and output dictionaries at this timestep
 
